@@ -14,7 +14,7 @@ class GridWorldEnv(gym.Env):
         self.window_size= 500
         self.window = None
         self.clock = None
-        self.metadata = {"render_fps": 10}
+        self.metadata = {"render_fps": 5}
         self.steps = 0
         self.pillar_locations = [np.array([2, 3]), np.array([2, 4]), np.array([4, 3]), np.array([4, 2])]
 
@@ -164,9 +164,10 @@ class GridWorldEnv(gym.Env):
             )
 
         # First we draw the target
+        target_color = (0, 255, 0) if np.array_equal(self._target_location, self._agent_location) else (255, 0, 0)
         pygame.draw.rect(
             canvas,
-            (255, 0, 0),
+            target_color,
             pygame.Rect(
                 pix_square_size * self._target_location,
                 (pix_square_size, pix_square_size),

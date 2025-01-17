@@ -65,9 +65,9 @@ class DQN(nn.Module):
 
     def __init__(self, n_observations, n_actions):
         super(DQN, self).__init__()
-        self.layer1 = nn.Linear(n_observations, 256)
-        self.layer2 = nn.Linear(256, 256)
-        self.layer3 = nn.Linear(256, n_actions)
+        self.layer1 = nn.Linear(n_observations, 512)
+        self.layer2 = nn.Linear(512, 512)
+        self.layer3 = nn.Linear(512, n_actions)
 
     # Called with either one element to determine next action, or a batch
     # during optimization. Returns tensor([[left0exp,right0exp]...]).
@@ -90,7 +90,7 @@ BATCH_SIZE = 128
 GAMMA = 0.99
 EPS_START = 0.9
 EPS_END = 0.05
-EPS_DECAY = 1000
+EPS_DECAY = 900
 TAU = 0.005
 LR = 1e-4
 
@@ -130,20 +130,21 @@ def select_action(state):
 episode_durations = []
 
 
-def plot_durations(show_result=False):
+def plot_steps(show_result=False):
     plt.figure(1)
-    durations_t = torch.tensor(episode_durations, dtype=torch.float)
+    steps_t = torch.tensor(episode_durations, dtype=torch.float)
     if show_result:
         plt.title('Result')
     else:
         plt.clf()
         plt.title('Training...')
     plt.xlabel('Episode')
-    plt.ylabel('Duration')
-    plt.plot(durations_t.numpy())
+    plt.ylabel('Steps')
+    plt.yscale('log')
+    plt.plot(steps_t.numpy())
     # Take 100 episode averages and plot them too
-    if len(durations_t) >= 100:
-        means = durations_t.unfold(0, 100, 1).mean(1).view(-1)
+    if len(steps_t) >= 100:
+        means = steps_t.unfold(0, 100, 1).mean(1).view(-1)
         means = torch.cat((torch.zeros(99), means))
         plt.plot(means.numpy())
 
@@ -204,7 +205,7 @@ def optimize_model():
 if torch.cuda.is_available() or torch.backends.mps.is_available():
     num_episodes = 600
 else:
-    num_episodes = 350
+    num_episodes = 600
 
 
 intermediate_plotting = False
@@ -213,9 +214,9 @@ intermediate_plotting = False
 for i_episode in range(num_episodes):
     # Initialize the environment and get its state
     print(f"Episode {i_episode} of {num_episodes}")
-    if i_episode == 300:
+    if i_episode == 550:
         input("Press Enter to start visualization.")
-    if i_episode > 300:
+    if i_episode > 550:
         options = {"render_mode": "human"}
     else:
         options = {"render_mode": "invisible"}
@@ -252,11 +253,11 @@ for i_episode in range(num_episodes):
         if done:
             episode_durations.append(t + 1)
             if intermediate_plotting:
-                plot_durations()
+                plot_steps()
             break
 
 print('Complete')
-plot_durations(show_result=True)
+plot_steps(show_result=True)
 plt.ioff()
 plt.show()
 
