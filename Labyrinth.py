@@ -129,16 +129,15 @@ class Labyrinth:
         tile.value = '.'
         for orientation in Orientation.get_shuffled():
             next_tile = tile.get_neighbour(orientation)
+            if self._is_out_of_bounds(next_tile[0], next_tile[1]):
+                break
             next_tile = self.tiles[next_tile[1]][next_tile[0]]
             if next_tile is not None:
                 neighbours = next_tile.get_all_neighbours_oriented(orientation)
                 usable = True
                 for neighbour in neighbours:
-                    if self._is_out_of_bounds(neighbour[0], neighbour[1]):
-                        neighbour = None
-                    else:
-                        neighbour = self.get_tile_at(neighbour[0], neighbour[1])
-                    if neighbour is None or neighbour.value != '#':
+                    neighbour = self.get_tile_at(neighbour[0], neighbour[1])
+                    if neighbour.value != '#':
                         usable = False
                         break
 
