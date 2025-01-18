@@ -1,17 +1,16 @@
-import gymnasium as gym
-from gymnasium.wrappers import RecordEpisodeStatistics, RecordVideo
 import math
 import random
+from collections import namedtuple, deque
+
+import gymnasium as gym
 import matplotlib
 import matplotlib.pyplot as plt
-from collections import namedtuple, deque
-from itertools import count
-
+import numpy as np
 import torch
 import torch.nn as nn
-import torch.optim as optim
 import torch.nn.functional as F
-import numpy as np
+import torch.optim as optim
+from gymnasium.wrappers import RecordEpisodeStatistics, RecordVideo
 
 from GridWorldEnv import GridWorldEnv
 from Labyrinth import Labyrinth
@@ -33,7 +32,7 @@ env = RecordEpisodeStatistics(env, buffer_length=num_episodes)
 # set up matplotlib
 is_ipython = 'inline' in matplotlib.get_backend()
 if is_ipython:
-    from IPython import display
+    pass
 
 plt.ion()
 
@@ -120,7 +119,6 @@ target_net.load_state_dict(policy_net.state_dict())
 optimizer = optim.AdamW(policy_net.parameters(), lr=LR, amsgrad=True)
 memory = ReplayMemory(10000)
 
-
 steps_done = 0
 
 
@@ -128,7 +126,7 @@ def select_action(state):
     global steps_done
     sample = random.random()
     eps_threshold = EPS_END + (EPS_START - EPS_END) * \
-        math.exp(-1. * steps_done / EPS_DECAY)
+                    math.exp(-1. * steps_done / EPS_DECAY)
     steps_done += 1
     if sample > eps_threshold:
         with torch.no_grad():
@@ -186,69 +184,67 @@ def optimize_model():
     optimizer.step()
 
 
-for i_episode in range(num_episodes):
-    # Initialize the environment and get its state
-    options = {"render_mode": "invisible"}
-    state, info = env.reset(options=options)
-    state = transform_to_one_hot_vector(state)
-    done = False
-    while not done:
-        action = select_action(state)
-        observation, reward, terminated, truncated, _ = env.step(action.item())
-        reward = torch.tensor([reward], device=device)
-        done = terminated or truncated
+def main(render_mode="invisible"):
+    global state, info
+    for i_episode in range(num_episodes):
+        # Initialize the environment and get its state
+        options = {"render_mode": render_mode}
+        state, info = env.reset(options=options)
+        state = transform_to_one_hot_vector(state)
+        done = False
+        while not done:
+            action = select_action(state)
+            observation, reward, terminated, truncated, _ = env.step(action.item())
+            reward = torch.tensor([reward], device=device)
+            done = terminated or truncated
 
-        if terminated:
-            next_state = None
-        else:
-            next_state = transform_to_one_hot_vector(observation)
+            if terminated:
+                next_state = None
+            else:
+                next_state = transform_to_one_hot_vector(observation)
 
-        # Store the transition in memory
-        memory.push(state, action, next_state, reward)
+            # Store the transition in memory
+            memory.push(state, action, next_state, reward)
 
-        # Move to the next state
-        state = next_state
+            # Move to the next state
+            state = next_state
 
-        # Perform one step of the optimization (on the policy network)
-        optimize_model()
+            # Perform one step of the optimization (on the policy network)
+            optimize_model()
 
-        # Soft update of the target network's weights
-        # θ′ ← τ θ + (1 −τ )θ′
-        target_net_state_dict = target_net.state_dict()
-        policy_net_state_dict = policy_net.state_dict()
-        for key in policy_net_state_dict:
-            target_net_state_dict[key] = policy_net_state_dict[key] * TAU + target_net_state_dict[key] * (1 - TAU)
-        target_net.load_state_dict(target_net_state_dict)
+            # Soft update of the target network's weights
+            # θ′ ← τ θ + (1 −τ )θ′
+            target_net_state_dict = target_net.state_dict()
+            policy_net_state_dict = policy_net.state_dict()
+            for key in policy_net_state_dict:
+                target_net_state_dict[key] = policy_net_state_dict[key] * TAU + target_net_state_dict[key] * (1 - TAU)
+            target_net.load_state_dict(target_net_state_dict)
 
-    print(f"Episode {env.episode_count} of {num_episodes} completed in {
-          env.episode_lengths} steps. [reward: {env.episode_returns}, truncated: {truncated}]")
+        print(f"Episode {env.episode_count} of {num_episodes} completed in {
+        env.episode_lengths} steps. [reward: {env.episode_returns}, truncated: {truncated}]")
+    env.close()
+    print('Complete')
+    print(f'Episode time taken: {env.time_queue}')
+    print(f'Episode total rewards: {env.return_queue}')
+    print(f'Episode lengths: {env.length_queue}')
+    # visualize the episode rewards, episode length and training error in one figure
+    fig, axs = plt.subplots(1, 3, figsize=(20, 8))
+    # np.convolve will compute the rolling mean for 100 episodes
+    axs[0].plot(np.convolve(env.return_queue, np.ones(100)))
+    axs[0].set_title("Episode Rewards")
+    axs[0].set_xlabel("Episode")
+    axs[0].set_ylabel("Reward")
+    axs[1].plot(np.convolve(env.length_queue, np.ones(100)))
+    axs[1].set_title("Episode Lengths")
+    axs[1].set_xlabel("Episode")
+    axs[1].set_ylabel("Length")
+    axs[2].plot(np.convolve(env.time_queue, np.ones(100)))
+    axs[2].set_title("Episode Times")
+    axs[2].set_xlabel("Episode")
+    axs[2].set_ylabel("Time")
+    plt.tight_layout()
+    plt.show()
 
 
-env.close()
-print('Complete')
-print(f'Episode time taken: {env.time_queue}')
-print(f'Episode total rewards: {env.return_queue}')
-print(f'Episode lengths: {env.length_queue}')
-
-# visualize the episode rewards, episode length and training error in one figure
-fig, axs = plt.subplots(1, 3, figsize=(20, 8))
-
-# np.convolve will compute the rolling mean for 100 episodes
-
-axs[0].plot(np.convolve(env.return_queue, np.ones(100)))
-axs[0].set_title("Episode Rewards")
-axs[0].set_xlabel("Episode")
-axs[0].set_ylabel("Reward")
-
-axs[1].plot(np.convolve(env.length_queue, np.ones(100)))
-axs[1].set_title("Episode Lengths")
-axs[1].set_xlabel("Episode")
-axs[1].set_ylabel("Length")
-
-axs[2].plot(np.convolve(env.time_queue, np.ones(100)))
-axs[2].set_title("Episode Times")
-axs[2].set_xlabel("Episode")
-axs[2].set_ylabel("Time")
-
-plt.tight_layout()
-plt.show()
+if __name__ == '__main__':
+    main()

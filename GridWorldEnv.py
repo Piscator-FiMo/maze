@@ -1,6 +1,7 @@
 from typing import Optional
-import numpy as np
+
 import gymnasium as gym
+import numpy as np
 import pygame
 
 from Labyrinth import Labyrinth, convert
@@ -10,12 +11,13 @@ class GridWorldEnv(gym.Env):
 
     def __init__(self, labyrinth: Labyrinth):
         self.labyrinth = labyrinth
+        self.truncation_threshold = self.labyrinth.columns * self.labyrinth.rows * 10
 
         # The size of the square grid
         self.render_mode = "invisible"
         self.window = None
         self.clock = None
-        self.metadata = {"render_fps": 5, 'render_modes': ["invisible", "human", "rgb_array"]}
+        self.metadata = {"render_fps": 10, 'render_modes': ["invisible", "human", "rgb_array"]}
         self.steps = 0
         self.max_distance = np.abs(np.linalg.norm(
             np.array([self.labyrinth.columns - 1, self.labyrinth.rows - 1]) - np.array([0, 0]), ord=1
@@ -103,9 +105,11 @@ class GridWorldEnv(gym.Env):
         terminated = np.array_equal(self._agent_location, self._target_location)
 
         self.steps += 1
-        truncated = not terminated and self.steps >= self.labyrinth.columns * self.labyrinth.rows * 10
-        reward = self.calculate_reward(terminated, truncated, self.steps, {"observation": prev_obs, "info": prev_info}, {
-                                       "observation": self._get_obs(), "info": self._get_info()})
+        truncated = not terminated and self.steps >= self.truncation_threshold
+        reward = self.calculate_exponential_reward(terminated, truncated, self.steps)
+        # reward = self.calculate_reward(terminated, truncated, self.steps, {"observation": prev_obs, "info": prev_info},
+        #                               {
+        #                                  "observation": self._get_obs(), "info": self._get_info()})
         observation = self._get_obs()
         info = self._get_info()
 
@@ -127,6 +131,14 @@ class GridWorldEnv(gym.Env):
             return -2 * (current["info"]["distance"])
         else:  # same distance
             return -5 * self.max_distance
+
+    def calculate_exponential_reward(self, terminated: bool, truncated: bool, steps_taken: int) -> float:
+        if terminated:
+            return 1 / self.normalize(steps_taken)
+        elif truncated:
+            return - 1 / (1.001 - self.normalize(steps_taken))
+        else:
+            return -1
 
     def render(self):
         cell_size = 50
@@ -157,7 +169,7 @@ class GridWorldEnv(gym.Env):
                     color = (0, 255, 0)
                 if color:
                     pygame.draw.rect(canvas, color, (cell_size * tile.x + 1, cell_size *
-                                     tile.y - 1, cell_size - 2, cell_size - 2))
+                                                     tile.y - 1, cell_size - 2, cell_size - 2))
 
         # Now we draw the agent
         pygame.draw.circle(canvas, (255, 0, 0), (self._agent_location + 0.5) * cell_size, cell_size / 3)
@@ -184,6 +196,9 @@ class GridWorldEnv(gym.Env):
                 (width, height),
             ),
         )
+
+    def normalize(self, steps_taken: int) -> float:
+        return (steps_taken - 1) / (self.truncation_threshold - 1)
 
 
 if __name__ == "__main__":
