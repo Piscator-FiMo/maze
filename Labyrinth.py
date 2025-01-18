@@ -6,6 +6,7 @@ from typing import List, Optional, Self, Tuple
 import numpy as np
 import matplotlib.pyplot as plt
 
+
 # (0,0) is the top left corner
 
 
@@ -107,10 +108,10 @@ class Labyrinth:
             self.start.value = '.'
 
         x = random.randint(0, self.columns)
-        y = random.randint(0, self.rows)
-        while self.is_wall_at(x, y):
+        y = 0
+        while self.is_wall_at(x, y) and y <= self.rows:
             x = random.randint(0, self.columns)
-            y = random.randint(0, self.rows)
+            y += 1
         self.start = self.get_tile_at(x, y)
         self.start.value = 'S'
 
@@ -118,10 +119,10 @@ class Labyrinth:
             self.end.value = '.'
 
         x = random.randint(0, self.columns)
-        y = random.randint(0, self.rows)
+        y = self.rows
         while self.is_wall_at(x, y) or self.start.position == (x, y):
             x = random.randint(0, self.columns)
-            y = random.randint(0, self.rows)
+            y -= 1
         self.end = self.get_tile_at(x, y)
         self.end.value = 'E'
 
@@ -163,6 +164,8 @@ if __name__ == '__main__':
         plt.imshow(np.array(rows), interpolation="nearest", origin="upper")
         plt.axis('off')
         plt.show()
+
+
     sys.setrecursionlimit(10000)
     l = Labyrinth(15, 25)
     [print(row) for row in l.tiles]
