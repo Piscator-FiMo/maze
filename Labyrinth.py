@@ -104,32 +104,26 @@ class Labyrinth:
 
     def regenerate_start_and_end(self):
         if self.start is not None:
-            self.start.value = '#'
+            self.start.value = '.'
 
-        shuffled_cols = [y for y in range(self.columns)]
-        random.shuffle(shuffled_cols)
-        for y in shuffled_cols:
-            t = self.get_tile_at(0, y)
-            n = t.get_neighbour(Orientation.EAST)
-            n = self.get_tile_at(n[0], n[1])
-            if n.value == '.':
-                t.value = 'S'
-                self.start = t
-                break
+        x = random.randint(0, self.columns)
+        y = random.randint(0, self.rows)
+        while self.is_wall_at(x, y):
+            x = random.randint(0, self.columns)
+            y = random.randint(0, self.rows)
+        self.start = self.get_tile_at(x, y)
+        self.start.value = 'S'
 
         if self.end is not None:
-            self.end.value = '#'
+            self.end.value = '.'
 
-        shuffled_cols = [y for y in range(self.columns)]
-        random.shuffle(shuffled_cols)
-        for y in shuffled_cols:
-            t = self.get_tile_at(self.columns - 1, y)
-            n = t.get_neighbour(Orientation.WEST)
-            n = self.get_tile_at(n[0], n[1])
-            if n.value == '.':
-                t.value = 'E'
-                self.end = t
-                break
+        x = random.randint(0, self.columns)
+        y = random.randint(0, self.rows)
+        while self.is_wall_at(x, y) or self.start.position == (x, y):
+            x = random.randint(0, self.columns)
+            y = random.randint(0, self.rows)
+        self.end = self.get_tile_at(x, y)
+        self.end.value = 'E'
 
     def _recursion(self, tile: Tile):
         tile.value = '.'
