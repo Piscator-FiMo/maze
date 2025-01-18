@@ -83,15 +83,15 @@ class GridWorldEnv(gym.Env):
         return observation, info
 
     def step(self, action):
+        prev_obs = self._get_obs()
+        prev_info = self._get_info()
+
         # Map the action (element of {0,1,2,3}) to the direction we walk in
         direction = self._action_to_direction[action]
-        # We use `np.clip` to make sure we don't leave the grid bounds
         new_location = self._agent_location + direction
-        hit = False
 
         # if agent hits a wall, don't move
         if self.labyrinth.is_wall_at(new_location[0], new_location[1]):
-            hit = True
             new_location = self._agent_location
 
         self._agent_location = new_location
@@ -107,7 +107,8 @@ class GridWorldEnv(gym.Env):
         if reached_target:
             print(f"reached target after {self.steps} steps")
         terminated = reached_target
-        reward = self.calculate_reward(reached_target, self.steps)  # the agent is only reached at the end of the episode
+        reward = self.calculate_reward(reached_target, self.steps, {"observation": prev_obs, "info": prev_info}, {
+                                       "observation": self._get_obs(), "info": self._get_info()})
         observation = self._get_obs()
         info = self._get_info()
 
@@ -116,10 +117,15 @@ class GridWorldEnv(gym.Env):
 
         return observation, reward, terminated, truncated, info
 
-    def calculate_reward(self, reached_target: bool, steps_taken: int):
-        if reached_target:
-            return 10000
-        return -1
+    def calculate_reward(self, reached_target: bool, steps_taken: int, previous: dict, current: dict):
+        if previous["info"]["distance"] > current["info"]["distance"]:  # closer
+            return 1
+        elif previous["info"]["distance"] < current["info"]["distance"]:  # further away
+            return -2
+        elif reached_target:
+            return np.iinfo(np.int32).max - steps_taken
+        else:  # same distance
+            return -5
 
     def _render_frame(self):
         cell_size = 50
