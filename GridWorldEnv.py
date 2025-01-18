@@ -18,9 +18,9 @@ class GridWorldEnv(gym.Env):
         self.metadata = {"render_fps": 5}
         self.steps = 0
         self.total_reward = 0
-        self.max_distance = np.linalg.norm(
+        self.max_distance = np.abs(np.linalg.norm(
             np.array([self.labyrinth.columns - 1, self.labyrinth.rows - 1]) - np.array([0, 0]), ord=1
-        )
+        ))
 
         # Define the agent and target location; randomly chosen in `reset` and updated in `step`
         self._agent_location = np.array([-1, -1], dtype=np.int32)
@@ -63,9 +63,9 @@ class GridWorldEnv(gym.Env):
 
     def _get_info(self):
         return {
-            "distance": np.linalg.norm(
+            "distance": np.abs(np.linalg.norm(
                 self._agent_location - self._target_location, ord=1
-            )
+            ))
         }
 
     def reset(self, seed: Optional[int] = None, options: Optional[dict] = None):
