@@ -17,6 +17,9 @@ class GridWorldEnv(gym.Env):
         self.clock = None
         self.metadata = {"render_fps": 5}
         self.steps = 0
+        self.max_distance = np.linalg.norm(
+            np.array([self.labyrinth.columns - 1, self.labyrinth.rows - 1]) - np.array([0, 0]), ord=1
+        )
 
         # Define the agent and target location; randomly chosen in `reset` and updated in `step`
         self._agent_location = np.array([-1, -1], dtype=np.int32)
@@ -97,35 +100,35 @@ class GridWorldEnv(gym.Env):
         self._agent_location = new_location
 
         # An environment is completed if and only if the agent has reached the target
-        reached_target = np.array_equal(self._agent_location, self._target_location)
+        terminated = np.array_equal(self._agent_location, self._target_location)
 
         self.steps += 1
-        truncated = False
-        if self.steps > 10000:
-            truncated = True
-            print("truncated")
-        if reached_target:
-            print(f"reached target after {self.steps} steps")
-        terminated = reached_target
-        reward = self.calculate_reward(reached_target, self.steps, {"observation": prev_obs, "info": prev_info}, {
+        truncated = not terminated and self.steps >= self.labyrinth.columns * self.labyrinth.rows * 10
+        reward = self.calculate_reward(terminated, truncated, self.steps, {"observation": prev_obs, "info": prev_info}, {
                                        "observation": self._get_obs(), "info": self._get_info()})
         observation = self._get_obs()
         info = self._get_info()
 
         if self.render_mode == "human":
             self._render_frame()
+        if truncated:
+            print(f"truncated after {self.steps} steps")
+        if terminated:
+            print(f"reached target after {self.steps} steps")
 
         return observation, reward, terminated, truncated, info
 
-    def calculate_reward(self, reached_target: bool, steps_taken: int, previous: dict, current: dict):
-        if previous["info"]["distance"] > current["info"]["distance"]:  # closer
-            return 1
+    def calculate_reward(self, terminated: bool, truncated: bool, steps_taken: int, previous: dict, current: dict):
+        if terminated:
+            return np.iinfo(np.int32).max / steps_taken
+        elif truncated:
+            return np.iinfo(np.int32).min
+        elif previous["info"]["distance"] > current["info"]["distance"]:  # closer
+            return 1 * (self.max_distance - current["info"]["distance"])
         elif previous["info"]["distance"] < current["info"]["distance"]:  # further away
-            return -2
-        elif reached_target:
-            return np.iinfo(np.int32).max - steps_taken
+            return -2 * (current["info"]["distance"])
         else:  # same distance
-            return -5
+            return -5 * self.max_distance
 
     def _render_frame(self):
         cell_size = 50
