@@ -1,5 +1,5 @@
 import gymnasium as gym
-from gymnasium.wrappers import RecordVideo
+from gymnasium.wrappers import RecordEpisodeStatistics, RecordVideo
 import math
 import random
 import matplotlib
@@ -28,6 +28,7 @@ gym.register(
 labyrinth = Labyrinth(10, 10, seed=42)
 env = gym.make("gymnasium_env/GridWorld-v0", labyrinth=labyrinth)
 env = RecordVideo(env, video_folder="labyrinth-agent", name_prefix="", episode_trigger=lambda x: x % 10 == 0)
+env = RecordEpisodeStatistics(env, buffer_length=num_episodes)
 
 # set up matplotlib
 is_ipython = 'inline' in matplotlib.get_backend()
@@ -139,36 +140,6 @@ def select_action(state):
         return torch.tensor([[env.action_space.sample()]], device=device, dtype=torch.long)
 
 
-episode_durations = []
-
-
-def plot_steps(show_result=False):
-    plt.figure(1)
-    steps_t = torch.tensor(episode_durations, dtype=torch.float)
-    if show_result:
-        plt.title('Result')
-    else:
-        plt.clf()
-        plt.title('Training...')
-    plt.xlabel('Episode')
-    plt.ylabel('Steps')
-    plt.yscale('log')
-    plt.plot(steps_t.numpy())
-    # Take 100 episode averages and plot them too
-    if len(steps_t) >= 100:
-        means = steps_t.unfold(0, 100, 1).mean(1).view(-1)
-        means = torch.cat((torch.zeros(99), means))
-        plt.plot(means.numpy())
-
-    plt.pause(0.001)  # pause a bit so that plots are updated
-    if is_ipython:
-        if not show_result:
-            display.display(plt.gcf())
-            display.clear_output(wait=True)
-        else:
-            display.display(plt.gcf())
-
-
 def optimize_model():
     if len(memory) < BATCH_SIZE:
         return
@@ -220,7 +191,8 @@ for i_episode in range(num_episodes):
     options = {"render_mode": "invisible"}
     state, info = env.reset(options=options)
     state = transform_to_one_hot_vector(state)
-    for t in count():
+    done = False
+    while not done:
         action = select_action(state)
         observation, reward, terminated, truncated, _ = env.step(action.item())
         reward = torch.tensor([reward], device=device)
@@ -248,15 +220,35 @@ for i_episode in range(num_episodes):
             target_net_state_dict[key] = policy_net_state_dict[key] * TAU + target_net_state_dict[key] * (1 - TAU)
         target_net.load_state_dict(target_net_state_dict)
 
-        if done:
-            episode_durations.append(t + 1)
-            if intermediate_plotting:
-                plot_steps()
-            break
+    print(f"Episode {env.episode_count} of {num_episodes} completed in {
+          env.episode_lengths} steps. [reward: {env.episode_returns}, truncated: {truncated}]")
 
 
 env.close()
 print('Complete')
-plot_steps(show_result=True)
-plt.ioff()
+print(f'Episode time taken: {env.time_queue}')
+print(f'Episode total rewards: {env.return_queue}')
+print(f'Episode lengths: {env.length_queue}')
+
+# visualize the episode rewards, episode length and training error in one figure
+fig, axs = plt.subplots(1, 3, figsize=(20, 8))
+
+# np.convolve will compute the rolling mean for 100 episodes
+
+axs[0].plot(np.convolve(env.return_queue, np.ones(100)))
+axs[0].set_title("Episode Rewards")
+axs[0].set_xlabel("Episode")
+axs[0].set_ylabel("Reward")
+
+axs[1].plot(np.convolve(env.length_queue, np.ones(100)))
+axs[1].set_title("Episode Lengths")
+axs[1].set_xlabel("Episode")
+axs[1].set_ylabel("Length")
+
+axs[2].plot(np.convolve(env.time_queue, np.ones(100)))
+axs[2].set_title("Episode Times")
+axs[2].set_xlabel("Episode")
+axs[2].set_ylabel("Time")
+
+plt.tight_layout()
 plt.show()

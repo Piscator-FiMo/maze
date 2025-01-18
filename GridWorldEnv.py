@@ -17,7 +17,6 @@ class GridWorldEnv(gym.Env):
         self.clock = None
         self.metadata = {"render_fps": 5, 'render_modes': ["invisible", "human", "rgb_array"]}
         self.steps = 0
-        self.total_reward = 0
         self.max_distance = np.abs(np.linalg.norm(
             np.array([self.labyrinth.columns - 1, self.labyrinth.rows - 1]) - np.array([0, 0]), ord=1
         ))
@@ -73,7 +72,6 @@ class GridWorldEnv(gym.Env):
         super().reset(seed=seed)
         self.render_mode = options["render_mode"]
         self.steps = 0
-        self.total_reward = 0
 
         self.labyrinth.regenerate_start_and_end()
         self._agent_location = np.array(self.labyrinth.start.position, dtype=np.int32)
@@ -111,14 +109,8 @@ class GridWorldEnv(gym.Env):
         observation = self._get_obs()
         info = self._get_info()
 
-        self.total_reward += reward
-
         if self.render_mode == "human":
             self.render()
-        if truncated:
-            print(f"truncated after {self.steps} steps and a total reward of {self.total_reward}")
-        if terminated:
-            print(f"reached target after {self.steps} steps and a total reward of {self.total_reward}")
 
         return observation, reward, terminated, truncated, info
 
@@ -147,7 +139,6 @@ class GridWorldEnv(gym.Env):
         if self.clock is None and self.render_mode == "human":
             self.clock = pygame.time.Clock()
 
-        pygame.display.set_caption(f'Steps: {self.steps}, Total Reward: {self.total_reward}')
         canvas = pygame.Surface(size)
         # The size of a single grid square in pixels
         canvas.fill((0, 0, 0))
@@ -168,7 +159,6 @@ class GridWorldEnv(gym.Env):
 
         # Now we draw the agent
         pygame.draw.circle(canvas, (255, 0, 0), (self._agent_location + 0.5) * cell_size, cell_size / 3)
-
         if self.render_mode == "human":
             # The following line copies our drawings from `canvas` to the visible window
             self.window.blit(canvas, canvas.get_rect())
