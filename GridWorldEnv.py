@@ -2,21 +2,21 @@ from typing import Optional
 import numpy as np
 import gymnasium as gym
 import pygame
-from Tools.demo.sortvisu import steps
+
+from Labyrinth import Labyrinth
 
 
 class GridWorldEnv(gym.Env):
 
-    def __init__(self, size: int = 5):
+    def __init__(self, labyrinth: Labyrinth):
+        self.labyrinth = labyrinth
+
         # The size of the square grid
-        self.size = size + 2
         self.render_mode = "invisible"
-        self.window_size= 500
         self.window = None
         self.clock = None
         self.metadata = {"render_fps": 5}
         self.steps = 0
-        self.pillar_locations = [np.array([2, 3]), np.array([2, 4]), np.array([4, 3]), np.array([4, 2])]
 
         # Define the agent and target location; randomly chosen in `reset` and updated in `step`
         self._agent_location = np.array([-1, -1], dtype=np.int32)
@@ -26,8 +26,8 @@ class GridWorldEnv(gym.Env):
         # Each location is encoded as an element of {0, ..., `size`-1}^2
         self.observation_space = gym.spaces.Dict(
             {
-                "agent": gym.spaces.Box(0, size - 1, shape=(2,), dtype=int),
-                "target": gym.spaces.Box(0, size - 1, shape=(2,), dtype=int),
+                "agent": gym.spaces.Box(low=np.array([0, 0]), high=np.array([self.labyrinth.columns - 1, self.labyrinth.rows - 1]), shape=(2,), dtype=np.int32),
+                "target": gym.spaces.Box(low=np.array([0, 0]), high=np.array([self.labyrinth.columns - 1, self.labyrinth.rows - 1]), shape=(2,), dtype=np.int32),
             }
         )
 
@@ -59,16 +59,8 @@ class GridWorldEnv(gym.Env):
         # Choose the agent's location uniformly at random
 
         # Choose the agent's location uniformly at random
-        self._agent_location = self.np_random.integers(1, self.size-1, size=2, dtype=int)
-        while self._has_pillar_collision(self._agent_location):
-            self._agent_location = self.np_random.integers(1, self.size-1, size=2, dtype=int)
-
-        # We will sample the target's location randomly until it does not coincide with the agent's location
-        self._target_location = self._agent_location
-        while np.array_equal(self._target_location, self._agent_location) or self._has_pillar_collision(self._target_location):
-            self._target_location = self.np_random.integers(
-                1, self.size-1, size=2, dtype=int
-            )
+        self._agent_location = np.array(self.labyrinth.start.position, dtype=np.int32)
+        self._target_location = np.array(self.labyrinth.end.position, dtype=np.int32)
 
         observation = self._get_obs()
         info = self._get_info()
@@ -78,27 +70,19 @@ class GridWorldEnv(gym.Env):
 
         return observation, info
 
-    def _has_pillar_collision(self, pos: np.array):
-        for pillar in self.pillar_locations:
-            if np.array_equal(pos, pillar):
-                return True
-        return False
-
     def step(self, action):
         # Map the action (element of {0,1,2,3}) to the direction we walk in
         direction = self._action_to_direction[action]
         # We use `np.clip` to make sure we don't leave the grid bounds
         new_location = self._agent_location + direction
-        self._agent_location = np.clip(
-            new_location, 1, self.size - 2
-        )
-        if not np.array_equal(self._agent_location, new_location):
-            hit = True
+        hit = False
 
-        #if agent hits a pillar, reset to previous position
-        if self._has_pillar_collision(self._agent_location):
+        # if agent hits a wall, don't move
+        if self.labyrinth.is_wall_at(new_location[0], new_location[1]):
             hit = True
-            self._agent_location = self._agent_location - direction
+            new_location = self._agent_location
+
+        self._agent_location = new_location
 
         # An environment is completed if and only if the agent has reached the target
         reached_target = np.array_equal(self._agent_location, self._target_location)
@@ -126,77 +110,38 @@ class GridWorldEnv(gym.Env):
         return -1
 
     def _render_frame(self):
+        cell_size = 50
+        width = self.labyrinth.columns * cell_size
+        height = self.labyrinth.rows * cell_size
+        size = (width, height)
+
         if self.window is None and self.render_mode == "human":
             pygame.init()
             pygame.display.init()
-            self.window = pygame.display.set_mode(
-                (self.window_size, self.window_size)
-            )
+            self.window = pygame.display.set_mode(size)
         if self.clock is None and self.render_mode == "human":
             self.clock = pygame.time.Clock()
 
-        canvas = pygame.Surface((self.window_size, self.window_size))
-        canvas.fill((255, 255, 255))
-        pix_square_size = (
-                self.window_size / self.size
-        )  # The size of a single grid square in pixels
-
-
-        #draw border
-        self.draw_border_rect(canvas, pix_square_size=pix_square_size, width=self.window_size, height=pix_square_size,
-                              position=np.array([0, 0], dtype=np.int32))
-        self.draw_border_rect(canvas, pix_square_size=pix_square_size, width=pix_square_size, height=self.window_size,
-                              position=np.array([0, 0], dtype=np.int32))
-        self.draw_border_rect(canvas, pix_square_size=pix_square_size, width=pix_square_size, height=self.window_size,
-                              position=np.array([self.size-1, 0], dtype=np.int32))
-        self.draw_border_rect(canvas, pix_square_size=pix_square_size, width=self.window_size, height=pix_square_size,
-                              position=np.array([0, self.size-1], dtype=np.int32))
-
-        # Pillars
-        for pillar in self.pillar_locations:
-            pygame.draw.rect(
-                canvas,
-                (50, 50, 50),
-                pygame.Rect(
-                    pix_square_size * pillar,
-                    (pix_square_size, pix_square_size),
-                ),
-            )
-
-        # First we draw the target
-        target_color = (0, 255, 0) if np.array_equal(self._target_location, self._agent_location) else (255, 0, 0)
-        pygame.draw.rect(
-            canvas,
-            target_color,
-            pygame.Rect(
-                pix_square_size * self._target_location,
-                (pix_square_size, pix_square_size),
-            ),
-        )
-        # Now we draw the agent
-        pygame.draw.circle(
-            canvas,
-            (0, 0, 255),
-            (self._agent_location + 0.5) * pix_square_size,
-            pix_square_size / 3,
-        )
+        canvas = pygame.Surface(size)
+        # The size of a single grid square in pixels
+        canvas.fill((0, 0, 0))
 
         # Finally, add some gridlines
-        for x in range(self.size + 1):
-            pygame.draw.line(
-                canvas,
-                0,
-                (0, pix_square_size * x),
-                (self.window_size, pix_square_size * x),
-                width=3,
-            )
-            pygame.draw.line(
-                canvas,
-                0,
-                (pix_square_size * x, 0),
-                (pix_square_size * x, self.window_size),
-                width=3,
-            )
+        for rows in self.labyrinth.tiles:
+            for tile in rows:
+                color = None
+                if tile.value == '.':
+                    color = (255, 255, 255)
+                elif tile.value == 'S':
+                    color = (0, 0, 255)
+                elif tile.value == 'E':
+                    color = (0, 255, 0)
+                if color:
+                    pygame.draw.rect(canvas, color, (cell_size * tile.x + 1, cell_size *
+                                     tile.y - 1, cell_size - 2, cell_size - 2))
+
+        # Now we draw the agent
+        pygame.draw.circle(canvas, (255, 0, 0), (self._agent_location + 0.5) * cell_size, cell_size / 3)
 
         if self.render_mode == "human":
             # The following line copies our drawings from `canvas` to the visible window
@@ -221,3 +166,11 @@ class GridWorldEnv(gym.Env):
                 (width, height),
             ),
         )
+
+
+if __name__ == "__main__":
+    lab = Labyrinth(15, 10)
+    env = GridWorldEnv(lab)
+    env.reset(options={"render_mode": "human"})
+    while True:
+        env._render_frame()

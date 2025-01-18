@@ -13,12 +13,14 @@ import torch.nn.functional as F
 import numpy as np
 
 from GridWorldEnv import GridWorldEnv
+from Labyrinth import Labyrinth
 
 gym.register(
     id="gymnasium_env/GridWorld-v0",
     entry_point=GridWorldEnv,
 )
-env = gym.make("gymnasium_env/GridWorld-v0")
+labyrinth = Labyrinth(10, 10)
+env = gym.make("gymnasium_env/GridWorld-v0", labyrinth=labyrinth)
 
 # set up matplotlib
 is_ipython = 'inline' in matplotlib.get_backend()
@@ -39,9 +41,10 @@ print(device)
 Transition = namedtuple('Transition',
                         ('state', 'action', 'next_state', 'reward'))
 
+
 def transform_to_one_hot_vector(n):
     concat = np.concatenate(list(n.values()))
-    one_hot_1 = np.zeros((concat.size, 7))  # grid size is 7
+    one_hot_1 = np.zeros((concat.size, labyrinth.columns * labyrinth.rows))
     one_hot_1[np.arange(concat.size), concat] = 1
     return torch.tensor(one_hot_1.ravel(), dtype=torch.float32, device=device).unsqueeze(0)
 
@@ -61,6 +64,7 @@ class ReplayMemory(object):
     def __len__(self):
         return len(self.memory)
 
+
 class DQN(nn.Module):
 
     def __init__(self, n_observations, n_actions):
@@ -78,6 +82,7 @@ class DQN(nn.Module):
 
     def concat(self, x):
         return np.concatenate(list(x.values()))
+
 
 # BATCH_SIZE is the number of transitions sampled from the replay buffer
 # GAMMA is the discount factor as mentioned in the previous section
@@ -156,6 +161,7 @@ def plot_steps(show_result=False):
         else:
             display.display(plt.gcf())
 
+
 def optimize_model():
     if len(memory) < BATCH_SIZE:
         return
@@ -167,10 +173,9 @@ def optimize_model():
 
     # Compute a mask of non-final states and concatenate the batch elements
     # (a final state would've been the one after which simulation ended)
-    non_final_mask = torch.tensor(tuple(map(lambda s: s is not None,
-                                          batch.next_state)), device=device, dtype=torch.bool)
-    non_final_next_states = torch.cat([s for s in batch.next_state
-                                                if s is not None])
+    non_final_mask = torch.tensor(tuple(map(lambda s: s is not None, batch.next_state)),
+                                  device=device, dtype=torch.bool)
+    non_final_next_states = torch.cat([s for s in batch.next_state if s is not None])
     state_batch = torch.cat(batch.state)
     action_batch = torch.cat(batch.action)
     reward_batch = torch.cat(batch.reward)
@@ -202,6 +207,7 @@ def optimize_model():
     torch.nn.utils.clip_grad_value_(policy_net.parameters(), 100)
     optimizer.step()
 
+
 if torch.cuda.is_available() or torch.backends.mps.is_available():
     num_episodes = 600
 else:
@@ -209,14 +215,15 @@ else:
 
 
 intermediate_plotting = False
+visualization_at_episode = 550
 
 
 for i_episode in range(num_episodes):
     # Initialize the environment and get its state
     print(f"Episode {i_episode} of {num_episodes}")
-    if i_episode == 550:
+    if i_episode == visualization_at_episode:
         input("Press Enter to start visualization.")
-    if i_episode > 550:
+    if i_episode >= visualization_at_episode:
         options = {"render_mode": "human"}
     else:
         options = {"render_mode": "invisible"}
@@ -247,7 +254,7 @@ for i_episode in range(num_episodes):
         target_net_state_dict = target_net.state_dict()
         policy_net_state_dict = policy_net.state_dict()
         for key in policy_net_state_dict:
-            target_net_state_dict[key] = policy_net_state_dict[key]*TAU + target_net_state_dict[key]*(1-TAU)
+            target_net_state_dict[key] = policy_net_state_dict[key] * TAU + target_net_state_dict[key] * (1 - TAU)
         target_net.load_state_dict(target_net_state_dict)
 
         if done:
@@ -260,4 +267,3 @@ print('Complete')
 plot_steps(show_result=True)
 plt.ioff()
 plt.show()
-
