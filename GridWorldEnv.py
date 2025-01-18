@@ -119,6 +119,8 @@ class GridWorldEnv(gym.Env):
             return np.iinfo(np.int32).max / steps_taken
         elif truncated:
             return np.iinfo(np.int32).min
+        elif np.array_equal(previous["observation"]["agent"], current["observation"]["agent"]):
+            return -3 * self.max_distance
         elif previous["info"]["distance"] > current["info"]["distance"]:  # closer
             return 1 * (self.max_distance - current["info"]["distance"])
         elif previous["info"]["distance"] < current["info"]["distance"]:  # further away
