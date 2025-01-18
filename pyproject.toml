@@ -1,0 +1,18 @@
+[tool.poetry]
+name = "maze"
+version = "0.1.0"
+description = ""
+authors = ["Gerber Florian", "Genecand Vincent", "Jungen Björn", "Stevanovski Angelina", "Fischer Moritz"]
+
+[tool.poetry.dependencies]
+python = "^3.12"
+gymnasium = "^1.0.0"
+numpy = "^2.2.1"
+torch = "^2.5.1"
+matplotlib = "^3.10.0"
+pygame = "^2.6.1"
+
+
+[build-system]
+requires = ["poetry-core"]
+build-backend = "poetry.core.masonry.api"
