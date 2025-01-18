@@ -30,7 +30,7 @@ class GridWorldEnv(gym.Env):
             {
                 "agent": gym.spaces.Box(low=low, high=high, shape=(2,), dtype=np.int32),
                 "target": gym.spaces.Box(low=low, high=high, shape=(2,), dtype=np.int32),
-                "neighbours": gym.spaces.Box(low=0, high=4, shape=(1,), dtype=np.int32),
+                "neighbours": gym.spaces.Box(low=0, high=4, shape=(4,), dtype=np.int32),
             }
         )
 
@@ -38,10 +38,10 @@ class GridWorldEnv(gym.Env):
         self.action_space = gym.spaces.Discrete(4)
         # Dictionary maps the abstract actions to the directions on the grid
         self._action_to_direction = {
-            0: np.array([1, 0]),  # right
-            1: np.array([0, 1]),  # up
-            2: np.array([-1, 0]),  # left
-            3: np.array([0, -1]),  # down
+            0: np.array([1, 0], dtype=np.int32),  # right
+            1: np.array([0, 1], dtype=np.int32),  # up
+            2: np.array([-1, 0], dtype=np.int32),  # left
+            3: np.array([0, -1], dtype=np.int32),  # down
         }
 
     def _get_obs(self):
