@@ -15,7 +15,7 @@ class GridWorldEnv(gym.Env):
         self.render_mode = "invisible"
         self.window = None
         self.clock = None
-        self.metadata = {"render_fps": 5}
+        self.metadata = {"render_fps": 5, 'render_modes': ["invisible", "human", "rgb_array"]}
         self.steps = 0
         self.total_reward = 0
         self.max_distance = np.abs(np.linalg.norm(
@@ -83,7 +83,7 @@ class GridWorldEnv(gym.Env):
         info = self._get_info()
 
         if self.render_mode == "human":
-            self._render_frame()
+            self.render()
 
         return observation, info
 
@@ -114,7 +114,7 @@ class GridWorldEnv(gym.Env):
         self.total_reward += reward
 
         if self.render_mode == "human":
-            self._render_frame()
+            self.render()
         if truncated:
             print(f"truncated after {self.steps} steps and a total reward of {self.total_reward}")
         if terminated:
@@ -134,7 +134,7 @@ class GridWorldEnv(gym.Env):
         else:  # same distance
             return -5 * self.max_distance
 
-    def _render_frame(self):
+    def render(self):
         cell_size = 50
         width = self.labyrinth.columns * cell_size
         height = self.labyrinth.rows * cell_size
@@ -199,4 +199,4 @@ if __name__ == "__main__":
     env = GridWorldEnv(lab)
     env.reset(options={"render_mode": "human"})
     while True:
-        env._render_frame()
+        env.render()

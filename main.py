@@ -1,4 +1,5 @@
 import gymnasium as gym
+from gymnasium.wrappers import RecordVideo
 import math
 import random
 import matplotlib
@@ -15,12 +16,18 @@ import numpy as np
 from GridWorldEnv import GridWorldEnv
 from Labyrinth import Labyrinth
 
+if torch.cuda.is_available() or torch.backends.mps.is_available():
+    num_episodes = 600
+else:
+    num_episodes = 600
+
 gym.register(
     id="gymnasium_env/GridWorld-v0",
     entry_point=GridWorldEnv,
 )
 labyrinth = Labyrinth(10, 10, seed=42)
 env = gym.make("gymnasium_env/GridWorld-v0", labyrinth=labyrinth)
+env = RecordVideo(env, video_folder="labyrinth-agent", name_prefix="", episode_trigger=lambda x: x % 10 == 0)
 
 # set up matplotlib
 is_ipython = 'inline' in matplotlib.get_backend()
@@ -208,25 +215,9 @@ def optimize_model():
     optimizer.step()
 
 
-if torch.cuda.is_available() or torch.backends.mps.is_available():
-    num_episodes = 600
-else:
-    num_episodes = 600
-
-
-intermediate_plotting = False
-visualization_at_episode = 550
-
-
 for i_episode in range(num_episodes):
     # Initialize the environment and get its state
-    print(f"Episode {i_episode} of {num_episodes}")
-    if i_episode == visualization_at_episode:
-        input("Press Enter to start visualization.")
-    if i_episode >= visualization_at_episode:
-        options = {"render_mode": "human"}
-    else:
-        options = {"render_mode": "invisible"}
+    options = {"render_mode": "invisible"}
     state, info = env.reset(options=options)
     state = transform_to_one_hot_vector(state)
     for t in count():
@@ -263,6 +254,8 @@ for i_episode in range(num_episodes):
                 plot_steps()
             break
 
+
+env.close()
 print('Complete')
 plot_steps(show_result=True)
 plt.ioff()
