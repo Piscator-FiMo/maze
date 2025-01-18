@@ -1,12 +1,10 @@
 from enum import Enum
 import random
 import sys
-from typing import List, Self, Tuple
+from typing import List, Optional, Self, Tuple
 
 import numpy as np
 import matplotlib.pyplot as plt
-
-random.seed(42)
 
 # (0,0) is the top left corner
 
@@ -78,7 +76,10 @@ class Tile:
 
 class Labyrinth:
 
-    def __init__(self, columns=10, rows=10) -> None:
+    def __init__(self, columns: int = 10, rows: int = 10, seed: Optional[int] = None) -> None:
+        if seed is not None:
+            random.seed(seed)
+
         self.columns = columns
         self.rows = rows
         self.tiles = [[Tile(x, y, '#') for x in range(columns)] for y in range(rows)]
@@ -174,4 +175,3 @@ if __name__ == '__main__':
     l = Labyrinth(15, 25)
     [print(row) for row in l.tiles]
     backup(l.get_array())
-    # print(Orientation.get_shuffled())

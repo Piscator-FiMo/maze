@@ -19,7 +19,7 @@ gym.register(
     id="gymnasium_env/GridWorld-v0",
     entry_point=GridWorldEnv,
 )
-labyrinth = Labyrinth(10, 10)
+labyrinth = Labyrinth(10, 10, seed=42)
 env = gym.make("gymnasium_env/GridWorld-v0", labyrinth=labyrinth)
 
 # set up matplotlib
