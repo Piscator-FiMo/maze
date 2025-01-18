@@ -106,7 +106,9 @@ class GridWorldEnv(gym.Env):
 
         self.steps += 1
         truncated = not terminated and self.steps >= self.truncation_threshold
-        reward = self.calculate_exponential_reward(terminated, truncated, self.steps)
+        reward = self.calculate_exponential_reward(terminated, truncated, self.steps,
+                                                   {"observation": prev_obs, "info": prev_info},
+                                                   {"observation": self._get_obs(), "info": self._get_info()})
         # reward = self.calculate_reward(terminated, truncated, self.steps, {"observation": prev_obs, "info": prev_info},
         #                               {
         #                                  "observation": self._get_obs(), "info": self._get_info()})
@@ -132,13 +134,20 @@ class GridWorldEnv(gym.Env):
         else:  # same distance
             return -5 * self.max_distance
 
-    def calculate_exponential_reward(self, terminated: bool, truncated: bool, steps_taken: int) -> float:
+    def calculate_exponential_reward(self, terminated: bool, truncated: bool, steps_taken: int, previous: dict,
+                                     current: dict) -> float:
         if terminated:
             return 1 / self.normalize(steps_taken)
         elif truncated:
-            return - 1 / (1.001 - self.normalize(steps_taken))
+            return - steps_taken
+        elif np.array_equal(previous["observation"]["agent"], current["observation"]["agent"]):
+            return -3
+        elif previous["info"]["distance"] > current["info"]["distance"]:  # closer
+            return 1
+        elif previous["info"]["distance"] < current["info"]["distance"]:  # further away
+            return -2
         else:
-            return -1
+            return 0
 
     def render(self):
         cell_size = 50
