@@ -56,9 +56,8 @@ class GridWorldEnv(gym.Env):
         super().reset(seed=seed)
         self.render_mode = options["render_mode"]
         self.steps = 0
-        # Choose the agent's location uniformly at random
 
-        # Choose the agent's location uniformly at random
+        self.labyrinth.regenerate_start_and_end()
         self._agent_location = np.array(self.labyrinth.start.position, dtype=np.int32)
         self._target_location = np.array(self.labyrinth.end.position, dtype=np.int32)
 
