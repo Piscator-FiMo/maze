@@ -83,30 +83,10 @@ class Labyrinth:
         self.columns = columns
         self.rows = rows
         self.tiles = [[Tile(x, y, '#') for x in range(columns)] for y in range(rows)]
+        self.start = None
+        self.end = None
         self._recursion(self.get_tile_at(1, 1))
-
-        # set start | ToDo: randomize
-        shuffled_cols = [y for y in range(self.columns)]
-        random.shuffle(shuffled_cols)
-        for y in shuffled_cols:
-            t = self.get_tile_at(0, y)
-            n = t.get_neighbour(Orientation.EAST)
-            n = self.get_tile_at(n[0], n[1])
-            if n.value == '.':
-                t.value = 'S'
-                self.start = t
-                break
-        # set end
-        shuffled_cols = [y for y in range(self.columns)]
-        random.shuffle(shuffled_cols)
-        for y in shuffled_cols:
-            t = self.get_tile_at(columns - 1, y)
-            n = t.get_neighbour(Orientation.WEST)
-            n = self.get_tile_at(n[0], n[1])
-            if n.value == '.':
-                t.value = 'E'
-                self.end = t
-                break
+        self.regenerate_start_and_end()
 
     def get_tile_at(self, x, y) -> Tile:
         if self._is_out_of_bounds(x, y):
@@ -121,6 +101,35 @@ class Labyrinth:
 
     def get_array(self):
         return [[cell.value for cell in row] for row in self.tiles]
+
+    def regenerate_start_and_end(self):
+        if self.start is not None:
+            self.start.value = '#'
+
+        shuffled_cols = [y for y in range(self.columns)]
+        random.shuffle(shuffled_cols)
+        for y in shuffled_cols:
+            t = self.get_tile_at(0, y)
+            n = t.get_neighbour(Orientation.EAST)
+            n = self.get_tile_at(n[0], n[1])
+            if n.value == '.':
+                t.value = 'S'
+                self.start = t
+                break
+
+        if self.end is not None:
+            self.end.value = '#'
+
+        shuffled_cols = [y for y in range(self.columns)]
+        random.shuffle(shuffled_cols)
+        for y in shuffled_cols:
+            t = self.get_tile_at(self.columns - 1, y)
+            n = t.get_neighbour(Orientation.WEST)
+            n = self.get_tile_at(n[0], n[1])
+            if n.value == '.':
+                t.value = 'E'
+                self.end = t
+                break
 
     def _recursion(self, tile: Tile):
         tile.value = '.'
@@ -155,23 +164,15 @@ def convert(symbol):
             return 3
 
 
-def backup(rows):
-
-    # rows = [[convert(cell) for cell in row.split(', ')]
-    #       for row in maze.splitlines() if len(row) > 0]
-    rows = [[convert(cell) for cell in row] for row in rows]
-
-    # print(rows)
-    a = np.array(rows)
-    # print(a)
-    plt.imshow(a, interpolation="nearest", origin="upper")
-    # plt.colorbar()
-    plt.axis('off')
-    plt.show()
-
-
 if __name__ == '__main__':
+    def render(rows):
+        rows = [[convert(cell) for cell in row] for row in rows]
+        plt.imshow(np.array(rows), interpolation="nearest", origin="upper")
+        plt.axis('off')
+        plt.show()
     sys.setrecursionlimit(10000)
     l = Labyrinth(15, 25)
     [print(row) for row in l.tiles]
-    backup(l.get_array())
+    render(l.get_array())
+    l.regenerate_start_and_end()
+    render(l.get_array())
