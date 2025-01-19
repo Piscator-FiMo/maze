@@ -114,7 +114,7 @@ class Labyrinth:
         self.start = self.get_tile_at(x, y)
         self.start.value = 'S'
 
-        if self.end is not None:
+        if self.end is not None and self.end != self.start:
             self.end.value = '.'
 
         x = random.randint(0, self.columns)
