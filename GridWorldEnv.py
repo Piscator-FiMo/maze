@@ -42,9 +42,9 @@ class GridWorldEnv(gym.Env):
         # Dictionary maps the abstract actions to the directions on the grid
         self._action_to_direction = {
             0: np.array([1, 0], dtype=np.int32),  # right
-            1: np.array([0, 1], dtype=np.int32),  # up
+            1: np.array([0, -1], dtype=np.int32),  # up
             2: np.array([-1, 0], dtype=np.int32),  # left
-            3: np.array([0, -1], dtype=np.int32),  # down
+            3: np.array([0, 1], dtype=np.int32),  # down
         }
 
     def _get_obs(self):
@@ -81,7 +81,7 @@ class GridWorldEnv(gym.Env):
         info = self._get_info()
 
         if self.render_mode == "human":
-            self.render()
+            self._render_frame()
 
         return observation, info
 
@@ -110,7 +110,7 @@ class GridWorldEnv(gym.Env):
         info = self._get_info()
 
         if self.render_mode == "human":
-            self.render()
+            self._render_frame()
 
         return observation, reward, terminated, truncated, info
 
@@ -129,6 +129,10 @@ class GridWorldEnv(gym.Env):
             return -5 * self.max_distance
 
     def render(self):
+        if self.render_mode == "rgb_array":
+            return self._render_frame()
+
+    def _render_frame(self):
         cell_size = 50
         width = self.labyrinth.columns * cell_size
         height = self.labyrinth.rows * cell_size
@@ -187,8 +191,30 @@ class GridWorldEnv(gym.Env):
 
 
 if __name__ == "__main__":
-    lab = Labyrinth(15, 10)
+    lab = Labyrinth(7, 7)
     env = GridWorldEnv(lab)
     env.reset(options={"render_mode": "human"})
+    env.metadata["render_fps"] = 60
+    env._render_frame()
     while True:
-        env.render()
+        for event in pygame.event.get():
+            if event.type == pygame.QUIT:
+                pygame.quit()
+                exit()
+            elif event.type == pygame.KEYUP:
+                if event.key == pygame.K_RIGHT:
+                    action = 0
+                elif event.key == pygame.K_UP:
+                    action = 1
+                elif event.key == pygame.K_LEFT:
+                    action = 2
+                elif event.key == pygame.K_DOWN:
+                    action = 3
+                else:
+                    continue
+
+                observation, reward, terminated, truncated, info = env.step(action)
+                print(f"Steps: {env.steps}, Reward: {reward}, Distance: {info['distance']}, observation: {observation}")
+                if terminated or truncated:
+                    env.reset(options={"render_mode": "human"})
+        env._render_frame()

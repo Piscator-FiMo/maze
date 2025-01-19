@@ -188,7 +188,7 @@ def optimize_model():
 
 for i_episode in range(num_episodes):
     # Initialize the environment and get its state
-    options = {"render_mode": "invisible"}
+    options = {"render_mode": "rgb_array"}
     state, info = env.reset(options=options)
     state = transform_to_one_hot_vector(state)
     done = False
