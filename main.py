@@ -4,13 +4,10 @@ import math
 import random
 import matplotlib
 import matplotlib.pyplot as plt
-from collections import namedtuple, deque
-from itertools import count
 
 import torch
 import torch.nn as nn
 import torch.optim as optim
-import torch.nn.functional as F
 import numpy as np
 
 from GridWorldEnv import GridWorldEnv
@@ -18,26 +15,10 @@ from Labyrinth import Labyrinth
 from memory import ReplayMemory, Transition
 from model import DQN
 
-if torch.cuda.is_available() or torch.backends.mps.is_available():
-    num_episodes = 600
-else:
-    num_episodes = 600
-
-gym.register(
-    id="gymnasium_env/GridWorld-v0",
-    entry_point=GridWorldEnv,
-)
-labyrinth = Labyrinth(10, 10, seed=42)
-env = gym.make("gymnasium_env/GridWorld-v0", labyrinth=labyrinth)
-env = RecordVideo(env, video_folder="labyrinth-agent", name_prefix="", episode_trigger=lambda x: x % 10 == 0)
-env = RecordEpisodeStatistics(env, buffer_length=num_episodes)
-
 # set up matplotlib
 is_ipython = 'inline' in matplotlib.get_backend()
 if is_ipython:
     from IPython import display
-
-plt.ion()
 
 # if GPU is to be used
 device = torch.device(
@@ -45,8 +26,16 @@ device = torch.device(
     "mps" if torch.backends.mps.is_available() else
     "cpu"
 )
+print("Device:", device)
 
-print(device)
+if torch.cuda.is_available() or torch.backends.mps.is_available():
+    num_episodes = 600
+else:
+    num_episodes = 10_000
+
+gym.register(id="gymnasium_env/GridWorld-v0", entry_point=GridWorldEnv)
+labyrinth = Labyrinth(10, 10, seed=42)
+env = gym.make("gymnasium_env/GridWorld-v0", labyrinth=labyrinth)
 
 
 def transform_to_one_hot_vector(n):
@@ -150,69 +139,74 @@ def optimize_model():
     optimizer.step()
 
 
-for i_episode in range(num_episodes):
-    # Initialize the environment and get its state
-    options = {"render_mode": "rgb_array"}
-    state, info = env.reset(options=options)
-    state = transform_to_one_hot_vector(state)
-    done = False
-    while not done:
-        action = select_action(state)
-        observation, reward, terminated, truncated, _ = env.step(action.item())
-        reward = torch.tensor([reward], device=device)
-        done = terminated or truncated
+def train():
+    global env
+    env = RecordVideo(env, video_folder="labyrinth-agent", name_prefix="labyrinth",
+                      episode_trigger=lambda x: x % 100 == 0 or x >= num_episodes - 10, fps=12)
+    env = RecordEpisodeStatistics(env, buffer_length=num_episodes)
+    for i_episode in range(num_episodes):
+        # Initialize the environment and get its state
+        options = {"render_mode": "rgb_array"}
+        state, info = env.reset(options=options)
+        state = transform_to_one_hot_vector(state)
+        done = False
+        while not done:
+            action = select_action(state)
+            observation, reward, terminated, truncated, _ = env.step(action.item())
+            reward = torch.tensor([reward], device=device)
+            done = terminated or truncated
 
-        if terminated:
-            next_state = None
-        else:
-            next_state = transform_to_one_hot_vector(observation)
+            if terminated:
+                next_state = None
+            else:
+                next_state = transform_to_one_hot_vector(observation)
 
-        # Store the transition in memory
-        memory.push(state, action, next_state, reward)
+            # Store the transition in memory
+            memory.push(state, action, next_state, reward)
 
-        # Move to the next state
-        state = next_state
+            # Move to the next state
+            state = next_state
 
-        # Perform one step of the optimization (on the policy network)
-        optimize_model()
+            # Perform one step of the optimization (on the policy network)
+            optimize_model()
 
-        # Soft update of the target network's weights
-        # θ′ ← τ θ + (1 −τ )θ′
-        target_net_state_dict = target_net.state_dict()
-        policy_net_state_dict = policy_net.state_dict()
-        for key in policy_net_state_dict:
-            target_net_state_dict[key] = policy_net_state_dict[key] * TAU + target_net_state_dict[key] * (1 - TAU)
-        target_net.load_state_dict(target_net_state_dict)
+            # Soft update of the target network's weights
+            # θ′ ← τ θ + (1 −τ )θ′
+            target_net_state_dict = target_net.state_dict()
+            policy_net_state_dict = policy_net.state_dict()
+            for key in policy_net_state_dict:
+                target_net_state_dict[key] = policy_net_state_dict[key] * TAU + target_net_state_dict[key] * (1 - TAU)
+            target_net.load_state_dict(target_net_state_dict)
 
-    print(f"Episode {env.episode_count} of {num_episodes} completed in {
-          env.episode_lengths} steps. [reward: {env.episode_returns}, truncated: {truncated}]")
+        print(f"Episode {env.episode_count} of {num_episodes} completed in {
+            env.episode_lengths} steps. [reward: {env.episode_returns}, truncated: {truncated}]")
+
+    env.close()
+    torch.save(policy_net.state_dict(), "labyrinth.pt")
+    # visualize the episode rewards, episode length and training error in one figure
+    fig, axs = plt.subplots(1, 3, figsize=(20, 8))
+
+    # np.convolve will compute the rolling mean for 100 episodes
+
+    axs[0].plot(np.convolve(env.return_queue, np.ones(100)))
+    axs[0].set_title("Episode Rewards")
+    axs[0].set_xlabel("Episode")
+    axs[0].set_ylabel("Reward")
+
+    axs[1].plot(np.convolve(env.length_queue, np.ones(100)))
+    axs[1].set_title("Episode Lengths")
+    axs[1].set_xlabel("Episode")
+    axs[1].set_ylabel("Length")
+
+    axs[2].plot(np.convolve(env.time_queue, np.ones(100)))
+    axs[2].set_title("Episode Times")
+    axs[2].set_xlabel("Episode")
+    axs[2].set_ylabel("Time")
+
+    plt.tight_layout()
+    # Save plots
+    plt.savefig('labyrinth_train.png')
 
 
-env.close()
-print('Complete')
-print(f'Episode time taken: {env.time_queue}')
-print(f'Episode total rewards: {env.return_queue}')
-print(f'Episode lengths: {env.length_queue}')
-
-# visualize the episode rewards, episode length and training error in one figure
-fig, axs = plt.subplots(1, 3, figsize=(20, 8))
-
-# np.convolve will compute the rolling mean for 100 episodes
-
-axs[0].plot(np.convolve(env.return_queue, np.ones(100)))
-axs[0].set_title("Episode Rewards")
-axs[0].set_xlabel("Episode")
-axs[0].set_ylabel("Reward")
-
-axs[1].plot(np.convolve(env.length_queue, np.ones(100)))
-axs[1].set_title("Episode Lengths")
-axs[1].set_xlabel("Episode")
-axs[1].set_ylabel("Length")
-
-axs[2].plot(np.convolve(env.time_queue, np.ones(100)))
-axs[2].set_title("Episode Times")
-axs[2].set_xlabel("Episode")
-axs[2].set_ylabel("Time")
-
-plt.tight_layout()
-plt.show()
+if __name__ == "__main__":
+    train()
