@@ -5,6 +5,11 @@ import pygame
 
 from Labyrinth import Labyrinth, convert
 
+# Initialize the font module
+pygame.font.init()
+# Create a font object
+font = pygame.font.Font(None, 24)
+
 
 class GridWorldEnv(gym.Env):
 
@@ -136,7 +141,7 @@ class GridWorldEnv(gym.Env):
         cell_size = 50
         width = self.labyrinth.columns * cell_size
         height = self.labyrinth.rows * cell_size
-        size = (width, height)
+        size = (width, height + font.get_height())
 
         if self.window is None and self.render_mode == "human":
             pygame.init()
@@ -165,6 +170,10 @@ class GridWorldEnv(gym.Env):
 
         # Now we draw the agent
         pygame.draw.circle(canvas, (255, 0, 0), (self._agent_location + 0.5) * cell_size, cell_size / 3)
+
+        # Render the step count text
+        step_count_text = font.render(f"Steps: {self.steps}", True, (255, 255, 255))
+        canvas.blit(step_count_text, (10, cell_size * self.labyrinth.rows))
         if self.render_mode == "human":
             # The following line copies our drawings from `canvas` to the visible window
             self.window.blit(canvas, canvas.get_rect())
