@@ -15,6 +15,8 @@ import numpy as np
 
 from GridWorldEnv import GridWorldEnv
 from Labyrinth import Labyrinth
+from memory import ReplayMemory, Transition
+from model import DQN
 
 if torch.cuda.is_available() or torch.backends.mps.is_available():
     num_episodes = 600
@@ -46,50 +48,12 @@ device = torch.device(
 
 print(device)
 
-Transition = namedtuple('Transition',
-                        ('state', 'action', 'next_state', 'reward'))
-
 
 def transform_to_one_hot_vector(n):
     concat = np.concatenate(list(n.values()))
     one_hot_1 = np.zeros((concat.size, labyrinth.columns * labyrinth.rows))
     one_hot_1[np.arange(concat.size), concat] = 1
     return torch.tensor(one_hot_1.ravel(), dtype=torch.float32, device=device).unsqueeze(0)
-
-
-class ReplayMemory(object):
-
-    def __init__(self, capacity):
-        self.memory = deque([], maxlen=capacity)
-
-    def push(self, *args):
-        """Save a transition"""
-        self.memory.append(Transition(*args))
-
-    def sample(self, batch_size):
-        return random.sample(self.memory, batch_size)
-
-    def __len__(self):
-        return len(self.memory)
-
-
-class DQN(nn.Module):
-
-    def __init__(self, n_observations, n_actions):
-        super(DQN, self).__init__()
-        self.layer1 = nn.Linear(n_observations, 512)
-        self.layer2 = nn.Linear(512, 512)
-        self.layer3 = nn.Linear(512, n_actions)
-
-    # Called with either one element to determine next action, or a batch
-    # during optimization. Returns tensor([[left0exp,right0exp]...]).
-    def forward(self, x):
-        x = F.relu(self.layer1(x))
-        x = F.relu(self.layer2(x))
-        return self.layer3(x)
-
-    def concat(self, x):
-        return np.concatenate(list(x.values()))
 
 
 # BATCH_SIZE is the number of transitions sampled from the replay buffer
