@@ -29,9 +29,9 @@ class Orientation(Enum):
         return opposites[self]
 
     @staticmethod
-    def get_shuffled():
+    def get_shuffled(rnd: random.Random):
         values = list(Orientation)
-        random.shuffle(values)
+        rnd.shuffle(values)
         return values
 
 
@@ -77,9 +77,7 @@ class Tile:
 class Labyrinth:
 
     def __init__(self, columns: int = 10, rows: int = 10, seed: Optional[int] = None) -> None:
-        if seed is not None:
-            random.seed(seed)
-
+        self.rnd = random.Random(seed)
         self.columns = columns
         self.rows = rows
         self.tiles = [[Tile(x, y, '#') for x in range(columns)] for y in range(rows)]
@@ -134,7 +132,7 @@ class Labyrinth:
 
     def _recursion(self, tile: Tile):
         tile.value = '.'
-        for orientation in Orientation.get_shuffled():
+        for orientation in Orientation.get_shuffled(self.rnd):
             next_tile = tile.get_neighbour(orientation)
             if self._is_out_of_bounds(next_tile[0], next_tile[1]):
                 break
