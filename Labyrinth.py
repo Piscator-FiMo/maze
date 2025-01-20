@@ -83,10 +83,9 @@ class Labyrinth:
         self.columns = columns
         self.rows = rows
         self.tiles = [[Tile(x, y, '#') for x in range(columns)] for y in range(rows)]
-        self.start = None
         self.end = None
-        self._recursion(self.get_tile_at(1, 1))
-        self.regenerate_start_and_end()
+        self.start = None
+        self._generate()
 
     def get_tile_at(self, x, y) -> Tile:
         if self._is_out_of_bounds(x, y):
@@ -102,28 +101,36 @@ class Labyrinth:
     def get_array(self):
         return [[cell.value for cell in row] for row in self.tiles]
 
-    def regenerate_start_and_end(self):
+    def regenerate_start(self):
         if self.start is not None:
             self.start.value = '.'
 
-        x = random.randint(0, self.columns)
-        y = random.randint(0, self.rows)
-        while self.is_wall_at(x, y):
-            x = random.randint(0, self.columns)
-            y = random.randint(0, self.rows)
+        x = self.rnd.randint(0, self.columns)
+        y = self.rnd.randint(0, self.rows)
+        while self.is_wall_at(x, y) or self.get_tile_at(x, y) == self.end:
+            x = self.rnd.randint(0, self.columns)
+            y = self.rnd.randint(0, self.rows)
         self.start = self.get_tile_at(x, y)
         self.start.value = 'S'
 
-        if self.end is not None and self.end != self.start:
-            self.end.value = '.'
+    def _generate(self):
+        # Define the exit
+        x = self.rnd.randint(1, self.columns - 1)
+        y = self.rnd.randint(1, self.rows - 1)
+        end = self.get_tile_at(x, y)
 
-        x = random.randint(0, self.columns)
-        y = random.randint(0, self.rows)
-        while self.is_wall_at(x, y) or self.start.position == (x, y):
-            x = random.randint(0, self.columns)
-            y = random.randint(0, self.rows)
-        self.end = self.get_tile_at(x, y)
-        self.end.value = 'E'
+        # Generate the labyrinth from the exit
+        limit = sys.getrecursionlimit()
+        sys.setrecursionlimit(10000)
+        self._recursion(end)
+        sys.setrecursionlimit(limit)
+
+        # mark the exit tile
+        end.value = 'E'
+        self.end = end
+
+        # Generate a random start
+        self.regenerate_start()
 
     def _recursion(self, tile: Tile):
         tile.value = '.'
@@ -163,9 +170,8 @@ if __name__ == '__main__':
         plt.imshow(np.array(rows), interpolation="nearest", origin="upper")
         plt.axis('off')
         plt.show()
-    sys.setrecursionlimit(10000)
     l = Labyrinth(15, 25)
     [print(row) for row in l.tiles]
     render(l.get_array())
-    l.regenerate_start_and_end()
+    l.regenerate_start()
     render(l.get_array())

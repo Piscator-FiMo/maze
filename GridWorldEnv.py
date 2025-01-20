@@ -60,7 +60,7 @@ class GridWorldEnv(gym.Env):
         self.render_mode = options["render_mode"]
         self.steps = 0
 
-        self.labyrinth.regenerate_start_and_end()
+        self.labyrinth.regenerate_start()
         self._agent_location = np.array(self.labyrinth.start.position, dtype=np.int32)
         self._target_location = np.array(self.labyrinth.end.position, dtype=np.int32)
 
