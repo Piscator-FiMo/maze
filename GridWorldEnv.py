@@ -102,18 +102,20 @@ class GridWorldEnv(gym.Env):
         return observation, reward, terminated, truncated, info
 
     def calculate_reward(self, terminated: bool, truncated: bool, steps_taken: int, previous: dict, current: dict):
+        reward = 0
+
         if terminated:
-            return np.iinfo(np.int32).max / steps_taken
-        elif truncated:
-            return np.iinfo(np.int32).min
-        elif np.array_equal(previous["observation"]["agent"], current["observation"]["agent"]):
-            return -3 * self.max_distance
-        elif previous["info"]["distance"] > current["info"]["distance"]:  # closer
-            return 1 * (self.max_distance - current["info"]["distance"])
-        elif previous["info"]["distance"] < current["info"]["distance"]:  # further away
-            return -2 * (current["info"]["distance"])
-        else:  # same distance
-            return -5 * self.max_distance
+            return 1
+
+        if truncated:
+            return -1
+
+        if np.array_equal(previous["info"]["agent"], current["info"]["agent"]):
+            reward -= 1
+
+        reward -= 0.05
+
+        return reward
 
     def render(self):
         if self.render_mode == "rgb_array":
