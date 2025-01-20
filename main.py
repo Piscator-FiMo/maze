@@ -136,8 +136,7 @@ def optimize_model():
     optimizer.step()
 
 
-def train():
-    global env
+def train(env):
     env = RecordVideo(env, video_folder="labyrinth-agent", name_prefix="labyrinth",
                       episode_trigger=lambda x: x % 100 == 0 or x >= num_episodes - 10, fps=12)
     env = RecordEpisodeStatistics(env, buffer_length=num_episodes)
@@ -205,5 +204,24 @@ def train():
     plt.savefig('labyrinth_train.png')
 
 
+def test(env, episodes):
+    policy_dqn = DQN(env.observation_space.n, env.action_space.n).to(device)
+    policy_dqn.load_state_dict(torch.load("labyrinth.pt"))
+    policy_dqn.eval()
+
+    for i_episode in range(episodes):
+        state, info = env.reset(options={"render_mode": "human"})
+        done = False
+        while not done:
+            with torch.no_grad():
+                action = policy_dqn(transform_to_one_hot_vector(state)).argmax().item()
+
+            state, reward, terminated, truncated, _ = env.step(action)
+            done = terminated or truncated
+
+    env.close()
+
+
 if __name__ == "__main__":
-    train()
+    train(env)
+    test(env, 25)
