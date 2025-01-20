@@ -1,3 +1,4 @@
+from itertools import count
 import gymnasium as gym
 from gymnasium.wrappers import RecordEpisodeStatistics, RecordVideo
 import math
@@ -15,71 +16,17 @@ from Labyrinth import Labyrinth
 from memory import ReplayMemory, Transition
 from model import DQN
 
-# set up matplotlib
-is_ipython = 'inline' in matplotlib.get_backend()
-if is_ipython:
-    from IPython import display
 
-# if GPU is to be used
-device = torch.device(
-    "cuda" if torch.cuda.is_available() else
-    "mps" if torch.backends.mps.is_available() else
-    "cpu"
-)
-print("Device:", device)
-
-if torch.cuda.is_available() or torch.backends.mps.is_available():
-    num_episodes = 600
-else:
-    num_episodes = 10_000
-
-gym.register(id="gymnasium_env/GridWorld-v0", entry_point=GridWorldEnv)
-labyrinth = Labyrinth(10, 10, seed=42)
-env = gym.make("gymnasium_env/GridWorld-v0", labyrinth=labyrinth)
-
-
-def transform_to_one_hot_vector(n):
-    one_hot_1 = np.zeros(labyrinth.columns * labyrinth.rows)
+def transform_to_one_hot_vector(n, n_observations):
+    one_hot_1 = np.zeros(n_observations)
     one_hot_1[n] = 1
     return torch.tensor(one_hot_1.ravel(), dtype=torch.float32, device=device).unsqueeze(0)
 
 
-# BATCH_SIZE is the number of transitions sampled from the replay buffer
-# GAMMA is the discount factor as mentioned in the previous section
-# EPS_START is the starting value of epsilon
-# EPS_END is the final value of epsilon
-# EPS_DECAY controls the rate of exponential decay of epsilon, higher means a slower decay
-# TAU is the update rate of the target network
-# LR is the learning rate of the ``AdamW`` optimizer
-BATCH_SIZE = 128
-GAMMA = 0.99
-EPS_START = 0.9
-EPS_END = 0.05
-EPS_DECAY = 900
-TAU = 0.005
-LR = 1e-4
-
-# Get number of actions from gym action space
-n_actions = env.action_space.n
-n_observations = env.observation_space.n
-
-policy_net = DQN(n_observations, n_actions).to(device)
-target_net = DQN(n_observations, n_actions).to(device)
-target_net.load_state_dict(policy_net.state_dict())
-
-optimizer = optim.AdamW(policy_net.parameters(), lr=LR, amsgrad=True)
-memory = ReplayMemory(10000)
-
-
-steps_done = 0
-
-
-def select_action(state):
-    global steps_done
+def select_action(state, policy_net, steps_done):
     sample = random.random()
     eps_threshold = EPS_END + (EPS_START - EPS_END) * \
         math.exp(-1. * steps_done / EPS_DECAY)
-    steps_done += 1
     if sample > eps_threshold:
         with torch.no_grad():
             # t.max(1) will return the largest column value of each row.
@@ -90,7 +37,7 @@ def select_action(state):
         return torch.tensor([[env.action_space.sample()]], device=device, dtype=torch.long)
 
 
-def optimize_model():
+def optimize_model(memory, policy_net, target_net, optimizer):
     if len(memory) < BATCH_SIZE:
         return
     transitions = memory.sample(BATCH_SIZE)
@@ -136,18 +83,31 @@ def optimize_model():
     optimizer.step()
 
 
-def train(env):
-    env = RecordVideo(env, video_folder="labyrinth-agent", name_prefix="labyrinth",
-                      episode_trigger=lambda x: x % 100 == 0 or x >= num_episodes - 10, fps=12)
-    env = RecordEpisodeStatistics(env, buffer_length=num_episodes)
-    for i_episode in range(num_episodes):
+def train(env, episodes, folder="labyrinth-training"):
+    n_observations = env.observation_space.n
+    n_actions = env.action_space.n
+
+    policy_net = DQN(n_observations, n_actions).to(device)
+    target_net = DQN(n_observations, n_actions).to(device)
+    target_net.load_state_dict(policy_net.state_dict())
+
+    optimizer = optim.AdamW(policy_net.parameters(), lr=LR, amsgrad=True)
+
+    memory = ReplayMemory(MEMORY_CAPACITY)
+
+    env = RecordVideo(env, video_folder=folder, name_prefix="labyrinth",
+                      episode_trigger=lambda x: x % 100 == 0 or x >= episodes - 10, fps=12)
+    env = RecordEpisodeStatistics(env, buffer_length=episodes)
+    for _ in range(episodes):
         # Initialize the environment and get its state
         options = {"render_mode": "rgb_array"}
-        state, info = env.reset(options=options)
-        state = transform_to_one_hot_vector(state)
+        state, _ = env.reset(options=options)
+        state = transform_to_one_hot_vector(state, n_observations)
         done = False
-        while not done:
-            action = select_action(state)
+        for step in count():
+            if done:
+                break
+            action = select_action(state, policy_net, step)
             observation, reward, terminated, truncated, _ = env.step(action.item())
             reward = torch.tensor([reward], device=device)
             done = terminated or truncated
@@ -155,7 +115,7 @@ def train(env):
             if terminated:
                 next_state = None
             else:
-                next_state = transform_to_one_hot_vector(observation)
+                next_state = transform_to_one_hot_vector(observation, n_observations)
 
             # Store the transition in memory
             memory.push(state, action, next_state, reward)
@@ -164,7 +124,7 @@ def train(env):
             state = next_state
 
             # Perform one step of the optimization (on the policy network)
-            optimize_model()
+            optimize_model(memory=memory, policy_net=policy_net, target_net=target_net, optimizer=optimizer)
 
             # Soft update of the target network's weights
             # θ′ ← τ θ + (1 −τ )θ′
@@ -174,13 +134,13 @@ def train(env):
                 target_net_state_dict[key] = policy_net_state_dict[key] * TAU + target_net_state_dict[key] * (1 - TAU)
             target_net.load_state_dict(target_net_state_dict)
 
-        print(f"Episode {env.episode_count} of {num_episodes} completed in {
-            env.episode_lengths} steps. [reward: {env.episode_returns}, truncated: {truncated}]")
+        print(f"Episode {env.episode_count}/{episodes} {"completed" if terminated else "truncated"}: steps={
+              env.episode_lengths} reward={env.episode_returns}")
 
     env.close()
-    torch.save(policy_net.state_dict(), "labyrinth.pt")
+
     # visualize the episode rewards, episode length and training error in one figure
-    fig, axs = plt.subplots(1, 3, figsize=(20, 8))
+    _, axs = plt.subplots(1, 3, figsize=(20, 8))
 
     # np.convolve will compute the rolling mean for 100 episodes
 
@@ -201,27 +161,72 @@ def train(env):
 
     plt.tight_layout()
     # Save plots
-    plt.savefig('labyrinth_train.png')
+    plt.savefig(f"{folder}/episodes_visualization.png")
+
+    policy_file = f"{folder}/policy_net.pt"
+    torch.save(policy_net.state_dict(), policy_file)
+    return policy_file
 
 
-def test(env, episodes):
-    policy_dqn = DQN(env.observation_space.n, env.action_space.n).to(device)
-    policy_dqn.load_state_dict(torch.load("labyrinth.pt"))
+def test(env, policy_file, episodes):
+    n_observations = env.observation_space.n
+
+    policy_dqn = DQN(n_observations, env.action_space.n).to(device)
+    policy_dqn.load_state_dict(torch.load(policy_file))
     policy_dqn.eval()
 
-    for i_episode in range(episodes):
-        state, info = env.reset(options={"render_mode": "human"})
+    for _ in range(episodes):
+        state, _ = env.reset(options={"render_mode": "human"})
         done = False
         while not done:
             with torch.no_grad():
-                action = policy_dqn(transform_to_one_hot_vector(state)).argmax().item()
+                action = policy_dqn(transform_to_one_hot_vector(state, n_observations)).argmax().item()
 
-            state, reward, terminated, truncated, _ = env.step(action)
+            state, _, terminated, truncated, _ = env.step(action)
             done = terminated or truncated
 
     env.close()
 
 
 if __name__ == "__main__":
-    train(env)
-    test(env, 25)
+    # set up matplotlib
+    is_ipython = 'inline' in matplotlib.get_backend()
+    if is_ipython:
+        from IPython import display
+
+    # if GPU is to be used
+    device = torch.device(
+        "cuda" if torch.cuda.is_available() else
+        "mps" if torch.backends.mps.is_available() else
+        "cpu"
+    )
+    print("Device:", device)
+
+    gym.register(id="gymnasium_env/GridWorld-v0", entry_point=GridWorldEnv)
+
+    # BATCH_SIZE is the number of transitions sampled from the replay buffer
+    # GAMMA is the discount factor as mentioned in the previous section
+    # EPS_START is the starting value of epsilon
+    # EPS_END is the final value of epsilon
+    # EPS_DECAY controls the rate of exponential decay of epsilon, higher means a slower decay
+    # TAU is the update rate of the target network
+    # LR is the learning rate of the ``AdamW`` optimizer
+    BATCH_SIZE = 128
+    GAMMA = 0.99
+    EPS_START = 0.9
+    EPS_END = 0.05
+    EPS_DECAY = 900
+    TAU = 0.005
+    LR = 1e-4
+    MEMORY_CAPACITY = 10_000
+
+    n_train_episodes = 600 if str(device) == "cpu" else 1_000
+    n_test_episodes = 10
+
+    labyrinth = Labyrinth(10, 10, seed=42)
+    env = gym.make("gymnasium_env/GridWorld-v0", labyrinth=labyrinth)
+    file = train(env, episodes=n_train_episodes)
+    # for _ in range(2000):
+    #     labyrinth.regenerate_start()
+    # file = "big-labyrinth/policy_net.pt"
+    test(env, file, n_test_episodes)
