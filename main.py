@@ -39,9 +39,8 @@ env = gym.make("gymnasium_env/GridWorld-v0", labyrinth=labyrinth)
 
 
 def transform_to_one_hot_vector(n):
-    concat = np.concatenate(list(n.values()))
-    one_hot_1 = np.zeros((concat.size, labyrinth.columns * labyrinth.rows))
-    one_hot_1[np.arange(concat.size), concat] = 1
+    one_hot_1 = np.zeros(labyrinth.columns * labyrinth.rows)
+    one_hot_1[n] = 1
     return torch.tensor(one_hot_1.ravel(), dtype=torch.float32, device=device).unsqueeze(0)
 
 
@@ -62,12 +61,10 @@ LR = 1e-4
 
 # Get number of actions from gym action space
 n_actions = env.action_space.n
-# Get the number of state observations
-state, info = env.reset(options={"render_mode": "invisible"})
-state = transform_to_one_hot_vector(state)
+n_observations = env.observation_space.n
 
-policy_net = DQN(state.size(1), n_actions).to(device)
-target_net = DQN(state.size(1), n_actions).to(device)
+policy_net = DQN(n_observations, n_actions).to(device)
+target_net = DQN(n_observations, n_actions).to(device)
 target_net.load_state_dict(policy_net.state_dict())
 
 optimizer = optim.AdamW(policy_net.parameters(), lr=LR, amsgrad=True)

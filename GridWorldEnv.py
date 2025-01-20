@@ -30,17 +30,7 @@ class GridWorldEnv(gym.Env):
         self._agent_location = np.array([-1, -1], dtype=np.int32)
         self._target_location = np.array([-1, -1], dtype=np.int32)
 
-        # Observations are dictionaries with the agent's and the target's location.
-        # Each location is encoded as an element of {0, ..., `size`-1}^2
-        low = np.array([0, 0])
-        high = np.array([self.labyrinth.columns - 1, self.labyrinth.rows - 1])
-        self.observation_space = gym.spaces.Dict(
-            {
-                "agent": gym.spaces.Box(low=low, high=high, shape=(2,), dtype=np.int32),
-                "target": gym.spaces.Box(low=low, high=high, shape=(2,), dtype=np.int32),
-                "neighbours": gym.spaces.Box(low=0, high=4, shape=(4,), dtype=np.int32),
-            }
-        )
+        self.observation_space = gym.spaces.Discrete(self.labyrinth.columns * self.labyrinth.rows)
 
         # We have 4 actions, corresponding to "right", "up", "left", "down"
         self.action_space = gym.spaces.Discrete(4)
@@ -53,23 +43,15 @@ class GridWorldEnv(gym.Env):
         }
 
     def _get_obs(self):
-        def get_location(delta):
-            location = self._agent_location + delta
-            tile = self.labyrinth.get_tile_at(location[0], location[1])
-            return convert(tile.value)
-
-        neighbours = np.array([get_location(delta) for delta in self._action_to_direction.values()], dtype=np.int32)
-        return {
-            "agent": self._agent_location,
-            "target": self._target_location,
-            "neighbours": neighbours
-        }
+        return int(self.labyrinth.rows * self._agent_location[0] + self._agent_location[1])
 
     def _get_info(self):
         return {
             "distance": np.abs(np.linalg.norm(
                 self._agent_location - self._target_location, ord=1
-            ))
+            )),
+            "agent": self._agent_location,
+            "target": self._target_location,
         }
 
     def reset(self, seed: Optional[int] = None, options: Optional[dict] = None):
